@@ -39,7 +39,7 @@ class Model:
                 'metrics':[]
             }
     
-    def compile(self, loss_function, optimizer, metrics, use_cuda = False):
+    def compile(self, loss_function, optimizer, metrics = [], use_cuda = False):
         self.loss_function = loss_function
         self.optimizer = optimizer
         self.metrics = ['loss'] + metrics
@@ -65,18 +65,39 @@ class Model:
         X = sample_batched[0]
         y = sample_batched[1]
         X = Variable(X.cuda() if self.use_cuda else X)
-        y = Variable(y.cuda() if self.use_cuda else y)
+        y = Variable(y.cuda() if self.use_cuda else y, requires_grad=False)
         return X, y
 
     def evaluate(self, X, y):
         output = self.model.forward(X)
         loss = self.loss_function(output, y)
         result_metrics = [loss]
+        
+        metrics_dic = {}
+        
+        # for unified computation
+        topk = ()
+        
         for metric in self.metrics:
             if metric == 'binary_acc':
-                result_metrics.append(metrics.binary_accuracy(y, output))
+                metrics_dic[metric] = metrics.binary_accuracy(y, output)
+                # result_metrics.append(metrics.binary_accuracy(y, output))
             if metric == 'categorical_acc':
-                result_metrics.append(metrics.categorical_accuracy(y, output))
+                metrics_dic[metric] = metrics.categorical_accuracy(y, output)
+                # result_metrics.append(metrics.categorical_accuracy(y, output))
+            if metric.startswith('top'):
+                topk = topk + (int(metric[3:]), )
+        
+        # for unified computation
+        if len(topk) != 0:
+            topk_metrics = metrics.topk(y, output, topk)
+            for i, k in enumerate(topk):
+                metrics_dic['top' + str(k)] = topk_metrics[i]
+                
+        # build result_metrics
+        for metric in self.metrics[1:]:
+            result_metrics.append(metrics_dic[metric])
+        
         return result_metrics
 
     def loadModel(self, sub_folder, epoch=1):
@@ -133,7 +154,7 @@ class Model:
                     self.loggerAddRecord(epoch+1, train_scalars, train_metrics)
                     
                 # ========== test ==========
-                test_metrics = []          
+                test_metrics = []
                 for i_batch, sample_batched in enumerate(val_data):
                     X,y = self.variableData(sample_batched)
                     result_metrics = self.evaluate(X, y)
@@ -163,13 +184,14 @@ class Model:
             print("If early stopped? please input 'y' or 'n'")
             answer = input()
             if answer == 'n':
+                del self.logger
                 shutil.rmtree(self.logdir)
                 print(self.logdir + ' Checkpoint deleted')
             elif answer == 'y':
                 self.saveNotes()
                 print('Notes saved')
                     
-    def averageMetrics(self, metrics, i_batch):                
+    def averageMetrics(self, metrics, i_batch):
         for i in range(len(metrics)):
             metrics[i] = metrics[i] / (i_batch + 1)
         return metrics

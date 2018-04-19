@@ -25,8 +25,6 @@ val_dataloader = Dataloader(val_dataset, batch_size, shuffle=True, num_workers=4
 ## 定义torcheras模型
 ```
 model = torcheras.Model(model, logdir) # logdir 为模型存储目录
-submodels = [(子模型名称1, 子模型1), (子模型名称2, 子模型2)]
-model.setSubmodels(submodels)
 ```
 torcheras会在logdir目录下以日期为基础建立当前模型的子文件夹，储存参数设置、模型文件和visualdl变量
 
@@ -62,6 +60,5 @@ visualDL --logdir=./ --host=0.0.0.0 --port=8089
 
 # To do list
 1. 更多类型的metrics
-2. sub models更人性化
-3. 更丰富的展示结果
-4. 已训练模型的自动化选择
+2. 更丰富的展示结果
+3. 已训练模型的自动化选择

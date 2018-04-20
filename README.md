@@ -61,6 +61,7 @@ visualDL --logdir=./ --host=0.0.0.0 --port=8089
 # dataset和model定义约定
 
 1. 在dataset.__getitem__方法中，返回值为x和y，且均为Tensor类型
+
 ```
 class MyDataset(Dataset):
     def __getitem__(self, index):
@@ -81,6 +82,7 @@ class MyDataset(Dataset):
 ```
 
 2. 当有多个标签输出时，在model.forward方法中输出tuple或list类型
+
 ```
     class MyModel(nn.Module):
         def forward(self):

@@ -43,19 +43,24 @@ class Model:
     def setDescription(self, decription):
         self.notes['description'] = description
     
-    def compile(self, loss_function, optimizer, metrics = [], use_cuda = False):
+    def compile(self, loss_function, optimizer, metrics = [], multi_tasks = {}, use_cuda = False):
         self.loss_function = loss_function
         self.optimizer = optimizer
         self.metrics = ['loss'] + metrics
         
+        # notes
+        self.notes['optimizer'] = self.optimizer.__class__.__name__
+        self.notes['metrics'] = self.metrics
+
+        # multi tasks
+        self.multi_tasks = multi_tasks
+        if 'outputs_indexes' in self.multi_tasks:
+            self.multi_tasks['outputs_indexes'] = [0] + self.multi_tasks['outputs_indexes']
+                    
         self.use_cuda = use_cuda
         if self.use_cuda:
             # self.cuda()
             self.model.cuda()
-                
-        # notes
-        self.notes['optimizer'] = self.optimizer.__class__.__name__
-        self.notes['metrics'] = self.metrics
         
         # optimizer parameters
         param_groups_num = 0
@@ -100,7 +105,9 @@ class Model:
                 for i_batch, sample_batched in enumerate(train_data):
                     self.optimizer.zero_grad()
                     X,y = self.variableData(sample_batched)
+                    
                     result_metrics = self.evaluate(X, y)
+                    
                     loss = result_metrics[0]
                     loss.backward()
                     self.optimizer.step()
@@ -142,7 +149,7 @@ class Model:
             self.saveNotes()
 
         except KeyboardInterrupt:
-            time.sleep(0.2)
+            # time.sleep(0.5)
             print("Is early stopped? please input 'y' or 'n'")
             answer = input()
             if answer == 'n':
@@ -169,20 +176,49 @@ class Model:
     def evaluate(self, X, y):
         output = self.model.forward(X)
         loss = self.loss_function(output, y)
-        result_metrics = [loss]
+        result_metrics = [loss]     
         
-        metrics_dic = {}
+        if 'outputs' not in self.multi_tasks:
+            result_metrics.extend(self.makeResultMetrics(output, y))
+        else:
+            multi_tasks_length = len(self.multi_tasks['outputs'])
+            
+            # for output 
+            multi_outputs = []
+            
+            if type(output) is tuple or type(output) is list:
+                for i in range(multi_tasks_length):
+                    multi_outputs.append(output[i])
+            else:
+                for i in range(multi_tasks_length):
+                    multi_outputs.append(output[:,i])
+            
+            # for y
+            multi_y = []
+            if type(y) is tuple or type(y) is list:
+                for i in range(multi_tasks_length):
+                    multi_y.append(y[i])
+            else:
+                for i in range(multi_tasks_length):
+                    multi_y.append(y[:,i])                    
+
+            for _output, _y in zip(multi_outputs, multi_y):
+                result_metrics.extend(self.makeResultMetrics(_output, _y))
+                        
+        return result_metrics
+    
+    def makeResultMetrics(self, output, y):
+        result_metrics = []
         
+        metrics_dic = {}     
         # for unified computation
         topk = ()
         
         for metric in self.metrics:
             if metric == 'binary_acc':
                 metrics_dic[metric] = metrics.binary_accuracy(y, output)
-                # result_metrics.append(metrics.binary_accuracy(y, output))
             if metric == 'categorical_acc':
                 metrics_dic[metric] = metrics.categorical_accuracy(y, output)
-                # result_metrics.append(metrics.categorical_accuracy(y, output))
             if metric.startswith('top'):
                 topk = topk + (int(metric[3:]), )
         
@@ -195,7 +231,7 @@ class Model:
         # build result_metrics
         for metric in self.metrics[1:]:
             result_metrics.append(metrics_dic[metric])
-        
+            
         return result_metrics
                     
     def averageMetrics(self, metrics, i_batch):
@@ -204,23 +240,39 @@ class Model:
         return metrics
         
     def makePrint(self, epoch, i_batch, metric_values, if_batch=True):
-        print_string = '[%d, %5d]'
-        print_data = (epoch + 1, i_batch + 1)
+        print_string = '[%d, %5d] loss: %.5f'
+        if if_batch == False: 
+            print_data = (epoch + 1, i_batch + 1, metric_values[0])
+        else:
+            print_data = (epoch + 1, i_batch + 1, metric_values[0].data[0])
         
-        for metric, value in zip(self.metrics, metric_values):
-            print_string  = print_string + ', ' + metric + ': %.5f'
-            if if_batch == False:
-                print_data = print_data + (value, )
-            else:
-                print_data = print_data + (value.data[0], )
+        if 'outputs' in self.multi_tasks:
+            outputs = self.multi_tasks['outputs']
+        else:
+            outputs = ['']
+            
+        metric_values_flag = 1
+        for output in outputs:      
+            if output != '':
+                print_string = print_string + ' ' + output
+                
+            for metric, value in zip(self.metrics[1:], metric_values[metric_values_flag:]):
+                print_string  = print_string + ', ' + metric + ': %.5f'
+                if if_batch == False:
+                    print_data = print_data + (value, )
+                else:
+                    print_data = print_data + (value.data[0], )
+                    
+                metric_values_flag += 1
+
         return print_string, print_data
 
     def step(self, result_metrics, metrics):
         if len(metrics) == 0:
-            for metric in self.metrics:
+            for metric in result_metrics:
                 metrics.append(0.0)
                 
-        for i, (metric, result) in enumerate(zip(self.metrics, result_metrics)):  # self.metrics (metric name)
+        for i, result in enumerate(result_metrics):  # self.metrics (metric name)
             metrics[i] = metrics[i] + result.data[0]
             
         return metrics
@@ -228,13 +280,27 @@ class Model:
     def initLogger(self):
         train_scalars = []
         test_scalars = []
+        
         with self.logger.mode('train'):
-            for metric in self.metrics:
-                scalar = self.logger.scalar('train/'+metric)
-                train_scalars.append(scalar)
+            if 'outputs' in self.multi_tasks:
+                train_scalars.append(self.logger.scalar('train/loss'))
+                for output in self.multi_tasks['outputs']:
+                    for metric in self.metrics[1:]:
+                        train_scalars.append(self.logger.scalar('train/' + output +'/' + metric))
+            else:
+                for metric in self.metrics:
+                    train_scalars.append(self.logger.scalar('train/' + metric))
+                    
         with self.logger.mode('test'):
-            for metric in self.metrics:
-                test_scalars.append(self.logger.scalar("test/" + metric))
+            if 'outputs' in self.multi_tasks:
+                test_scalars.append(self.logger.scalar('test/loss'))
+                for output in self.multi_tasks['outputs']:
+                    for metric in self.metrics[1:]:
+                        test_scalars.append(self.logger.scalar("test/" + output + '/' + metric))
+            else:
+                for metric in self.metrics:
+                    test_scalars.append(self.logger.scalar("test/" + metric))
+                    
         return train_scalars, test_scalars
     
     def loggerAddRecord(self, step, scalars, metrics):

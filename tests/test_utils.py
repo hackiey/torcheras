@@ -1,6 +1,6 @@
 import torcheras
 from torch.utils.data import DataLoader
-from test_dataset import CategoricalDataset
+from datasets import CategoricalDataset
 
 print('Start test utils.proportion...')
 N = 100

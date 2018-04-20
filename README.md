@@ -63,10 +63,8 @@ visualDL --logdir=./ --host=0.0.0.0 --port=8089
 1. 在dataset.__getitem__方法中，返回值为x和y，且均为Tensor类型
 ```
 class MyDataset(Dataset):
-    ...
     def __getitem__(self, index):
         return self.x[index], self.y[index]
-    ...
 ```
 
 当有多个标签输出时，需要将其组合成一个Tensor：
@@ -85,12 +83,10 @@ class MyDataset(Dataset):
 2. 当有多个标签输出时，在model.forward方法中输出tuple或list类型
 ```
     class MyModel(nn.Module):
-        ...
         def forward(self):
             return (y1, y2)
             或
             return [y1, y2]
-        ...
 ```
 
 # To do list

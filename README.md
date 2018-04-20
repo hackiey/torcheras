@@ -11,7 +11,7 @@ $ python setup.py install
 import torcheras
 ```
 
-## 定义pyTorch模型和dataloader
+## 定义pyTorch模型和dataloader
 
 ```
 import torch
@@ -58,7 +58,43 @@ visualDL --logdir=./ --host=0.0.0.0 --port=8089
 ```
 访问对应网址，会展示train和val的所有metrics结果
 
+# dataset和model定义约定
+
+1. 在dataset.__getitem__方法中，返回值为x和y，且均为Tensor类型
+```
+class MyDataset(Dataset):
+    ...
+    def __getitem__(self, index):
+        return self.x[index], self.y[index]
+    ...
+```
+
+当有多个标签输出时，需要将其组合成一个Tensor：
+
+```
+    y1 = np.ones(4, 1)
+    y2 = np.zeros(4, 1)
+
+    y = np.concatenate((y1, y2), 1)
+```
+
+```
+    y: [[1, 0], [1, 0], [1, 0], [1, 0]]
+```
+
+2. 当有多个标签输出时，在model.forward方法中输出tuple或list类型
+```
+    class MyModel(nn.Module):
+        ...
+        def forward(self):
+            return (y1, y2)
+            或
+            return [y1, y2]
+        ...
+```
+
 # To do list
 1. 更多类型的metrics
-2. 更丰富的展示结果
-3. 已训练模型的自动化选择
+2. 更丰富的展示结果
+3. 已训练模型的自动化选择
+

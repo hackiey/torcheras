@@ -54,8 +54,6 @@ class Model:
 
         # multi tasks
         self.multi_tasks = multi_tasks
-        if 'outputs_indexes' in self.multi_tasks:
-            self.multi_tasks['outputs_indexes'] = [0] + self.multi_tasks['outputs_indexes']
                     
         self.use_cuda = use_cuda
         if self.use_cuda:

@@ -9,7 +9,7 @@ import torcheras
 from models import LeNet, MultiTasksClassification
 from datasets import CategoricalDatasetMultiTasks
 
-use_cuda = torch.cuda.is_available()
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
 batch_size = 100
 
@@ -30,8 +30,8 @@ def multiCrossEntropy(y_pred, y_true):
     loss = loss / y_pred[0].shape[0]
     return loss
 
-test_type = 'single task classification'
-# test_type = 'multi tasks classification'
+# test_type = 'single task classification'
+test_type = 'multi tasks classification'
 
 if test_type == 'single task classification':
     
@@ -48,7 +48,7 @@ if test_type == 'single task classification':
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
     
-    model.compile(criterion, optimizer, metrics = ['top1', 'top2'])
+    model.compile(criterion, optimizer, metrics = ['top1', 'top2'], device = device)
 
 elif test_type == 'multi tasks classification':
     
@@ -60,7 +60,7 @@ elif test_type == 'multi tasks classification':
     
     optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
     
-    model.compile(multiCrossEntropy, optimizer, metrics = ['top1', 'top2'], multi_tasks = {'outputs':['output_a', 'output_b']})
+    model.compile(multiCrossEntropy, optimizer, metrics = ['top1', 'top2'], multi_tasks = ['output_a', 'output_b'], device = device)
 
 train_loader = torch.utils.data.DataLoader(
                  dataset=train_set,

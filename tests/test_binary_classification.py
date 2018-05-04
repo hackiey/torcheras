@@ -1,8 +1,6 @@
 import torcheras
-
 import numpy as np
 import torch
-from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader
 from datasets import BinaryDatasetMultiTasks, BinaryDataset
 from models import TwoLayerNet
@@ -12,6 +10,8 @@ from models import TwoLayerNet
 N, D_in, H, D_out = 100000, 4, 4, 3
 batch_size = 64
 epochs = 200
+
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
 # test_type = 'single task classification'
 test_type = 'multi tasks classification'
@@ -44,9 +44,9 @@ model = torcheras.Model(model, 'test_records')
 
 # compile and train
 if test_type == 'single task classification':
-    model.compile(criterion, optimizer, metrics = ['binary_acc'])
+    model.compile(criterion, optimizer, metrics = ['binary_acc'], device = device)
 elif test_type == 'multi tasks classification':
-    multi_tasks = {'outputs': ['output_a', 'output_b', 'output_c']}
-    model.compile(criterion, optimizer, metrics = ['binary_acc'], multi_tasks = multi_tasks)    
+    multi_tasks = ['output_a', 'output_b', 'output_c']
+    model.compile(criterion, optimizer, metrics = ['binary_acc'], multi_tasks = multi_tasks, device=device)
 
 model.fit(train_dataloader, test_dataloader, epochs)

@@ -6,59 +6,48 @@ import time
 from datetime import datetime
 
 import torch
-from torch.autograd import Variable
-from visualdl import LogWriter
+# from torch.autograd import Variable
+# from visualdl import LogWriter
+    
 import random
 
 from . import metrics
 
 class Model:
-    def __init__(self, model, logdir = '', for_train = True):
+    def __init__(self, model, logdir, for_train = True):
         self.model = model
         
         self.logdir = logdir
-        
         self.for_train = for_train
-        if for_train == True:
-            if logdir != '':
-                if not os.path.exists(self.logdir):
-                    os.mkdir(self.logdir)
-                now = datetime.now()
-                folder = '_'.join([str(i) for i in [now.year, now.month, now.day, now.hour, now.minute, now.second, now.microsecond]])
-                self.logdir = os.path.join(self.logdir, folder)
-
-                if not os.path.exists(self.logdir):
-                    os.mkdir(self.logdir)
         
-            self.logger = LogWriter(self.logdir, sync_cycle = 50)
-
-            self.notes = {
-                'optimizer': '',
-                'description':'',
-                'params': {},
-                'epochs': [],
-                'metrics':[]
-            }
+        self.notes = {
+            'optimizer': '',
+            'description':'',
+            'params': {},
+            'epochs': [],
+            'metrics':[]
+        }
             
-    def setDescription(self, decription):
-        self.notes['description'] = description
+        self._custom_objects = {}
+            
+    def set_description(self, decription):
+        self._notes['description'] = description
     
-    def compile(self, loss_function, optimizer, metrics = [], multi_tasks = {}, use_cuda = False):
+    def compile(self, loss_function, optimizer, metrics = [], multi_tasks = [''], custom_objects = {}, device = torch.device('cpu')):
         self.loss_function = loss_function
+        
         self.optimizer = optimizer
         self.metrics = ['loss'] + metrics
+        self.multi_tasks = multi_tasks
+        self.custom_objects = custom_objects
+        self.device = device
         
         # notes
         self.notes['optimizer'] = self.optimizer.__class__.__name__
         self.notes['metrics'] = self.metrics
-
-        # multi tasks
-        self.multi_tasks = multi_tasks
-                    
-        self.use_cuda = use_cuda
-        if self.use_cuda:
-            # self.cuda()
-            self.model.cuda()
+        
+        # send model to the device
+        self.model.to(self.device)
         
         # optimizer parameters
         param_groups_num = 0
@@ -77,7 +66,7 @@ class Model:
                 if k != 'params':
                     self.notes['params'][k] = v
 
-    def loadModel(self, sub_folder, epoch=1):
+    def load_model(self, sub_folder, epoch=1):
         self.model.load_state_dict(torch.load(os.path.join(self.logdir, sub_folder, 'model_' + str(epoch)+ '.pth')))
         
     def predict(self, X):
@@ -90,8 +79,19 @@ class Model:
         if not self.for_train:
             raise AttributeError('This model is not for training.')
         try:
-            if self.logdir != '':
-                train_scalars, test_scalars = self.initLogger()
+            if not os.path.exists(self.logdir):
+                os.mkdir(self.logdir)
+            now = datetime.now()
+            folder = '_'.join([str(i) for i in [now.year, now.month, now.day, now.hour, now.minute, now.second, now.microsecond]])
+            self.logdir = os.path.join(self.logdir, folder)
+
+            if not os.path.exists(self.logdir):
+                os.mkdir(self.logdir)
+        
+            # self.logger = LogWriter(self.logdir, sync_cycle = 50)
+
+            # if self.logdir != '':
+            #     train_scalars, test_scalars = self._init_logger()
                 
             print(self.logdir)
             print(self.notes['optimizer'])
@@ -102,86 +102,88 @@ class Model:
                 train_metrics = []
                 for i_batch, sample_batched in enumerate(train_data):
                     self.optimizer.zero_grad()
-                    X,y = self.variableData(sample_batched)
+                    x,y = self._variable_data(sample_batched)
                     
-                    result_metrics = self.evaluate(X, y)
+                    result_metrics = self._evaluate(x, y)
                     
                     loss = result_metrics[0]
                     loss.backward()
                     self.optimizer.step()
 
-                    train_metrics = self.step(result_metrics, train_metrics)
+                    train_metrics = self._add_metrics(result_metrics, train_metrics)
 
-                    print_string, print_data = self.makePrint(epoch, i_batch, result_metrics)
+                    print_string, print_data = self._make_print(epoch, i_batch, result_metrics)
                     print(print_string % print_data, end='')
                     print('\r', end='')
 
                 # train metrics
-                train_metrics = self.averageMetrics(train_metrics, i_batch)
-                print_string, print_data = self.makePrint(epoch, i_batch, train_metrics, if_batch=False)
+                train_metrics = self._average_metrics(train_metrics, i_batch)
+                print_string, print_data = self._make_print(epoch, i_batch, train_metrics)
                 print(print_string % print_data) 
 
-                if self.logdir != '':
-                    self.loggerAddRecord(epoch+1, train_scalars, train_metrics)
+                # self._logger_add_record(epoch+1, train_scalars, train_metrics)
                     
                 # ========== test ==========
-                test_metrics = []
-                for i_batch, sample_batched in enumerate(val_data):
-                    X,y = self.variableData(sample_batched)
-                    result_metrics = self.evaluate(X, y)
-                    test_metrics = self.step(result_metrics, test_metrics)
+                with torch.no_grad():
+                    test_metrics = []
+                    for i_batch, sample_batched in enumerate(val_data):
+                        X,y = self._variable_data(sample_batched)
+                        result_metrics = self._evaluate(X, y)
+                        test_metrics = self._add_metrics(result_metrics, test_metrics)
                 
-                # test metrics
-                test_metrics = self.averageMetrics(test_metrics, i_batch)
-                print_string, print_data = self.makePrint(epoch, i_batch, test_metrics, if_batch=False)
-                print(print_string % print_data)
-                
-                if self.logdir != '':
-                    self.loggerAddRecord(epoch+1, test_scalars, test_metrics)
+                    # test metrics
+                    test_metrics = self._average_metrics(test_metrics, i_batch)
+                    print_string, print_data = self._make_print(epoch, i_batch, test_metrics)
+                    print(print_string % print_data)
+
+                # self._logger_add_record(epoch+1, test_scalars, test_metrics)
                     
                 torch.save(self.model.state_dict(), os.path.join(self.logdir, 'model_' + str(epoch + 1) + '.pth'))
                 
                 self.notes['epochs'].append([train_metrics, test_metrics])
             
             # save notes
-            self.saveNotes()
+            self._save_notes()
 
         except KeyboardInterrupt:
-            # time.sleep(0.5)
-            print("Is early stopped? please input 'y' or 'n'")
-            answer = input()
-            if answer == 'n':
-                del self.logger
-                shutil.rmtree(self.logdir)
-                print(self.logdir + ' Checkpoint deleted')
-            elif answer == 'y':
-                self.saveNotes()
-                print('Notes saved')
-                
+            try:
+                time.sleep(0.5)
+                print("Is early stopped? please input 'y' or 'n'")
+                answer = input()
+                if answer == 'n':
+                    self._del_logdir()
+                elif answer == 'y':
+                    self._save_notes()
+                    print('Notes saved')
+            except KeyboardInterrupt:
+                self._del_logdir()
         except Exception as e:
             traceback.print_exc()
-            shutil.rmtree(self.logdir)
-            print(self.logdir + ' Checkpoint deleted')
+            self._del_logdir()
                 
     # === private ===
-    def variableData(self, sample_batched):
-        X = sample_batched[0]
+    def _variable_data(self, sample_batched):
+        x = sample_batched[0]
         y = sample_batched[1]
-        X = Variable(X.cuda() if self.use_cuda else X)
-        y = Variable(y.cuda() if self.use_cuda else y, requires_grad=False)
-        return X, y
+        
+        x = x.to(self.device)
+        y = y.to(self.device)
+        
+        return x, y
 
-    def evaluate(self, X, y):
+    def _evaluate(self, X, y):
         output = self.model.forward(X)
         loss = self.loss_function(output, y)
         result_metrics = [loss]     
         
-        if 'outputs' not in self.multi_tasks:
-            result_metrics.extend(self.makeResultMetrics(output, y))
+        if self.multi_tasks[0] == '':
+            # single task
+            result_metrics.extend(self._make_result_metrics(output, y))
         else:
-            multi_tasks_length = len(self.multi_tasks['outputs'])
+            # multi tasks
+            multi_tasks_length = len(self.multi_tasks)
             
-            # for output 
+            # for output (predictions)
             multi_outputs = []
             
             if type(output) is tuple or type(output) is list:
@@ -191,7 +193,7 @@ class Model:
                 for i in range(multi_tasks_length):
                     multi_outputs.append(output[:,i])
             
-            # for y
+            # for y (true labels)
             multi_y = []
             if type(y) is tuple or type(y) is list:
                 for i in range(multi_tasks_length):
@@ -201,11 +203,26 @@ class Model:
                     multi_y.append(y[:,i])                    
 
             for _output, _y in zip(multi_outputs, multi_y):
-                result_metrics.extend(self.makeResultMetrics(_output, _y))
+                result_metrics.extend(self._make_result_metrics(_output, _y))
                         
         return result_metrics
     
-    def makeResultMetrics(self, output, y):
+    def _add_metrics(self, result_metrics, metrics):
+        if len(metrics) == 0:
+            for metric in result_metrics:
+                metrics.append(0.0)
+                
+        for i, result in enumerate(result_metrics):  
+            metrics[i] = metrics[i] + result.item()
+            
+        return metrics   
+
+    def _average_metrics(self, metrics, i_batch):
+        for i in range(len(metrics)):
+            metrics[i] = metrics[i] / (i_batch + 1)
+        return metrics   
+    
+    def _make_result_metrics(self, output, y):
         result_metrics = []
         
         metrics_dic = {}     
@@ -213,12 +230,18 @@ class Model:
         topk = ()
         
         for metric in self.metrics:
-            if metric == 'binary_acc':
+            if metric == 'loss':
+                continue
+            elif metric == 'binary_acc':
                 metrics_dic[metric] = metrics.binary_accuracy(y, output)
-            if metric == 'categorical_acc':
+            elif metric == 'categorical_acc':
                 metrics_dic[metric] = metrics.categorical_accuracy(y, output)
-            if metric.startswith('top'):
-                topk = topk + (int(metric[3:]), )
+            elif metric.startswith('top'):
+                # get the k in 'top1, top2, ...'
+                topk = topk + (int(metric[3:]), ) 
+            else:
+                # custom metrics
+                metrics_dic[metric] = self.custom_objects[metric](y, output)
         
         # for unified computation
         if len(topk) != 0:
@@ -231,51 +254,30 @@ class Model:
             result_metrics.append(metrics_dic[metric])
             
         return result_metrics
-                    
-    def averageMetrics(self, metrics, i_batch):
-        for i in range(len(metrics)):
-            metrics[i] = metrics[i] / (i_batch + 1)
-        return metrics
         
-    def makePrint(self, epoch, i_batch, metric_values, if_batch=True):
+    def _make_print(self, epoch, i_batch, metric_values):
         print_string = '[%d, %5d] loss: %.5f'
-        if if_batch == False: 
-            print_data = (epoch + 1, i_batch + 1, metric_values[0])
-        else:
-            print_data = (epoch + 1, i_batch + 1, metric_values[0].data[0])
-        
-        if 'outputs' in self.multi_tasks:
-            outputs = self.multi_tasks['outputs']
-        else:
-            outputs = ['']
+        print_data = (epoch + 1, i_batch + 1, metric_values[0])
             
-        metric_values_flag = 1
-        for output in outputs:      
+        metric_values_index = 1
+        for output in self.multi_tasks:      
             if output != '':
-                print_string = print_string + ' ' + output
+                print_string = print_string + ', ' + output + ': '
+            else:
+                print_string = print_string + ', '
                 
-            for metric, value in zip(self.metrics[1:], metric_values[metric_values_flag:]):
-                print_string  = print_string + ', ' + metric + ': %.5f'
-                if if_batch == False:
-                    print_data = print_data + (value, )
-                else:
-                    print_data = print_data + (value.data[0], )
+            for metric, value in zip(self.metrics[1:], metric_values[metric_values_index:]):
+                print_string  = print_string + metric + ': %.5f, '
+                print_data = print_data + (value, )
                     
-                metric_values_flag += 1
+                metric_values_index += 1
+                
+            # delete last ', ' from the print string
+            print_string = print_string[: -2]
 
         return print_string, print_data
-
-    def step(self, result_metrics, metrics):
-        if len(metrics) == 0:
-            for metric in result_metrics:
-                metrics.append(0.0)
-                
-        for i, result in enumerate(result_metrics):  # self.metrics (metric name)
-            metrics[i] = metrics[i] + result.data[0]
-            
-        return metrics
-
-    def initLogger(self):
+    
+    def _init_logger(self):
         train_scalars = []
         test_scalars = []
         
@@ -301,11 +303,16 @@ class Model:
                     
         return train_scalars, test_scalars
     
-    def loggerAddRecord(self, step, scalars, metrics):
+    def _logger_add_record(self, step, scalars, metrics):
         for scalar, metric in zip(scalars, metrics):
             scalar.add_record(step, metric)
             
-    def saveNotes(self):
+    def _save_notes(self):
         with open(self.logdir + '/notes.json',"w") as f:
             json.dump(self.notes, f)
+    
+    def _del_logdir(self):
+        # del self.logger
+        shutil.rmtree(self.logdir)
+        print(self.logdir + ' Checkpoint deleted')
             

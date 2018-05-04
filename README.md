@@ -30,7 +30,8 @@ torcheras会在logdir目录下以日期为基础建立当前模型的子文件�
 
 ## 定义损失函数、优化方法和指标
 ```
-model.compile(loss_function, optimizer, ['categorical_acc'], use_cuda=True)
+multi_tasks = ['output_1', 'output_2']
+model.compile(loss_function, optimizer, ['categorical_acc'], multi_tasks = multi_tasks, device = device)
 ```
 
 ## 训练
@@ -50,7 +51,7 @@ model.fit(train_data, val_data, epochs)]
 [1  20] loss: 0.57, acc: 0.82        # val
 ```
 
-## 图形化展示
+## 图形化展示(暂不可用)
 
 每执行一个epoch，会将所有的metrics结果添加至visualdl变量中，进入logdir目录，进入子文件夹，执行
 ```
@@ -60,7 +61,7 @@ visualDL --logdir=./ --host=0.0.0.0 --port=8089
 
 # dataset和model定义约定
 
-1. 在dataset.\__getitem__方法中，返回值为x和y，且均为Tensor类型
+1. 在dataset.\__getitem__方法中，返回值为x和y
 
 ```
 class MyDataset(Dataset):
@@ -90,6 +91,9 @@ class MyDataset(Dataset):
             或
             return [y1, y2]
 ```
+# 更丰富的例子
+/tests/test_binary_classification.py
+/tests/test_multi_classifications.py
 
 # To do list
 1. 更多类型的metrics

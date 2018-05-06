@@ -59,7 +59,7 @@ visualDL --logdir=./ --host=0.0.0.0 --port=8089
 ```
 访问对应网址，会展示train和val的所有metrics结果
 
-### 图形化展示（Torcheras）
+## 图形化展示（Torcheras）
 在logdir目录下，执行
 ```
 torcheras --host=0.0.0.0 --port=8089

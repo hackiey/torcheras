@@ -51,13 +51,20 @@ model.fit(train_data, val_data, epochs)]
 [1  20] loss: 0.57, acc: 0.82        # val
 ```
 
-## 图形化展示(暂不可用)
+## 图形化展示(VisualDL，暂不可用)
 
 每执行一个epoch，会将所有的metrics结果添加至visualdl变量中，进入logdir目录，进入子文件夹，执行
 ```
 visualDL --logdir=./ --host=0.0.0.0 --port=8089
 ```
 访问对应网址，会展示train和val的所有metrics结果
+
+### 图形化展示（Torcheras）
+在logdir目录下，执行
+```
+torcheras --host=0.0.0.0 --port=8089
+```
+可以展示多个模型的scalars
 
 # dataset和model定义约定
 

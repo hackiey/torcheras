@@ -54,7 +54,7 @@ class CategoricalDatasetMultiTasks(DefaultDataset):
         
         self.x = np.random.random((N, D_in)).astype(np.float32)
         
-        self.y1 = (np.round(self.x.sum(1)) % D_out1).astype(np.int)
-        self.y2 = (np.round(self.x.sum(1)) % D_out2).astype(np.int)
+        self.y1 = (np.round(self.x.sum(1)) % D_out1).astype(np.int64)
+        self.y2 = (np.round(self.x.sum(1)) % D_out2).astype(np.int64)
         
         self.y = np.concatenate((self.y1.reshape(N,1), self.y2.reshape(N,1)), 1)

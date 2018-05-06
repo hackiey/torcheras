@@ -30,8 +30,8 @@ class Model:
             
         self._custom_objects = {}
             
-    def set_description(self, decription):
-        self._notes['description'] = description
+    def set_description(self, description):
+        self.notes['description'] = description
     
     def compile(self, loss_function, optimizer, metrics = [], multi_tasks = [''], custom_objects = {}, device = torch.device('cpu')):
         self.loss_function = loss_function
@@ -45,6 +45,7 @@ class Model:
         # notes
         self.notes['optimizer'] = self.optimizer.__class__.__name__
         self.notes['metrics'] = self.metrics
+        self.notes['multi_tasks'] = self.multi_tasks
         
         # send model to the device
         self.model.to(self.device)
@@ -157,7 +158,7 @@ class Model:
                     print('Notes saved')
             except KeyboardInterrupt:
                 self._del_logdir()
-        except Exception as e:
+        except Exception:
             traceback.print_exc()
             self._del_logdir()
                 

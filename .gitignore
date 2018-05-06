@@ -1,6 +1,9 @@
 tests/test_records
 tests/data
 
+# IDE stuff
+.vscode/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

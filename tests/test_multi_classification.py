@@ -30,13 +30,13 @@ def multiCrossEntropy(y_pred, y_true):
     loss = loss / y_pred[0].shape[0]
     return loss
 
-# test_type = 'single task classification'
-test_type = 'multi tasks classification'
+test_type = 'single task classification'
+# test_type = 'multi tasks classification'
 
 if test_type == 'single task classification':
     
     root = './data'
-    download = False  # download MNIST dataset or not
+    download = True  # download MNIST dataset or not
 
     trans = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5,), (1.0,))])
     train_set = dset.MNIST(root=root, train=True, transform=trans, download=download)

@@ -100,6 +100,7 @@ class Model:
             
             for epoch in range(epochs):
                 # ========== train ==========
+                self.model.train()
                 train_metrics = []
                 for i_batch, sample_batched in enumerate(train_data):
                     self.optimizer.zero_grad()
@@ -166,9 +167,16 @@ class Model:
     def _variable_data(self, sample_batched):
         x = sample_batched[0]
         y = sample_batched[1]
-        
-        x = x.to(self.device)
-        y = y.to(self.device)
+        if type(x) is list or type(x) is tuple:
+            for i, _x in enumerate(x):
+                x[i] = x[i].to(self.device)
+        else:
+            x = x.to(self.device)
+        if type(y) is list or type(y) is tuple:
+            for i, _y in enumerate(y):
+                y[i] = y[i].to(self.device)
+        else:
+            y = y.to(self.device)
         
         return x, y
 

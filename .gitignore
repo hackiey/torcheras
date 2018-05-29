@@ -3,6 +3,7 @@ tests/data
 
 # IDE stuff
 .vscode/*
+.idea/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

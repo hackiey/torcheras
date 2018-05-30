@@ -52,7 +52,8 @@ class Model:
         
         # optimizer parameters
         param_groups_num = 0
-        for param_group in self.optimizer.param_groups:       
+        param_groups = self.optimizer.param_groups if 'param_groups' in dir(self.optimizer) else self.optimizer.optimizer.param_groups
+        for param_group in param_groups:
             if 'module_name' in param_group:
                 self.notes['params'][param_group['module_name']] = {}
             else:
@@ -62,8 +63,8 @@ class Model:
                 if k != 'params' and k != 'module_name':
                     self.notes['params'][param_group['module_name']][k] = v
                     
-        if param_groups_num == 0 and len(optimizer.param_groups) == 1:
-            for k, v in optimizer.param_groups[0].items():
+        if param_groups_num == 0 and len(param_groups) == 1:
+            for k, v in param_groups[0].items():
                 if k != 'params':
                     self.notes['params'][k] = v
 
@@ -103,7 +104,7 @@ class Model:
                 self.model.train()
                 train_metrics = []
                 for i_batch, sample_batched in enumerate(train_data):
-                    self.optimizer.zero_grad()
+                    self.model.zero_grad()
                     x,y = self._variable_data(sample_batched)
                     
                     result_metrics = self._evaluate(x, y)

@@ -127,6 +127,7 @@ class Model:
                 # self._logger_add_record(epoch+1, train_scalars, train_metrics)
                     
                 # ========== test ==========
+                self.model.eval()
                 with torch.no_grad():
                     test_metrics = []
                     for i_batch, sample_batched in enumerate(val_data):

@@ -186,6 +186,19 @@ class Model:
         except Exception:
             traceback.print_exc()
             self._del_logdir()
+
+    def evaluate(self, test_data):
+        with torch.no_grad():
+            test_metrics = []
+            for i_batch, sample_batched in enumerate(test_data):
+                X,y = self._variable_data(sample_batched)
+                result_metrics = self._evaluate(X, y)
+                test_metrics = self._add_metrics(result_metrics, test_metrics)
+        
+            # test metrics
+            test_metrics = self._average_metrics(test_metrics, i_batch)
+            print_string, print_data = self._make_print(epoch, i_batch, test_metrics)
+            print(print_string % print_data)
                 
     # === private ===
     def _variable_data(self, sample_batched):
@@ -348,4 +361,3 @@ class Model:
         # del self.logger
         shutil.rmtree(self.logdir)
         print(self.logdir + ' Checkpoint deleted')
-            

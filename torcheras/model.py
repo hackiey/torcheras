@@ -12,6 +12,7 @@ import torch
 import random
 
 from . import metrics
+from .ema import EMA
 
 class Model:
     def __init__(self, model, logdir, for_train = True):
@@ -68,8 +69,14 @@ class Model:
                 if k != 'params':
                     self.notes['params'][k] = v
 
-    def load_model(self, sub_folder, epoch=1):
-        self.model.load_state_dict(torch.load(os.path.join(self.logdir, sub_folder, 'model_' + str(epoch)+ '.pth')))
+    def load_model(self, sub_folder, epoch=1, ema=False):
+        if ema:
+            ema_shadow = torch.load(os.path.join(self.logdir, sub_folder, 'ema_'+str(epoch)+'.pth'))
+            state_dict = self.model.state_dict()
+            state_dict.update(ema_shadow)
+            self.model.load_state_dict(state_dict)
+        else:
+            self.model.load_state_dict(torch.load(os.path.join(self.logdir, sub_folder, 'model_' + str(epoch)+ '.pth')))
         
     def predict(self, X):
         return self.model.predict(X)
@@ -77,12 +84,15 @@ class Model:
     def parameters(self):
         return self.model.parameters()
 
-    def fit(self, train_data, val_data, epochs = 200):
+    def fit(self, train_data, val_data, epochs = 200, 
+            ema_decay=None):        
+
         if not self.for_train:
             raise AttributeError('This model is not for training.')
         try:
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
+            
             now = datetime.now()
             folder = '_'.join([str(i) for i in [now.year, now.month, now.day, now.hour, now.minute, now.second, now.microsecond]])
             self.logdir = os.path.join(self.logdir, folder)
@@ -98,6 +108,11 @@ class Model:
             print(self.logdir)
             print(self.notes['optimizer'])
             print(self.notes['params'])
+
+
+            # expenential moving average
+            if ema_decay:
+                ema = EMA(ema_decay, self.model.named_parameters())
             
             for epoch in range(epochs):
                 # ========== train ==========
@@ -112,6 +127,9 @@ class Model:
                     loss = result_metrics[0]
                     loss.backward()
                     self.optimizer.step()
+
+                    if ema_decay:
+                        ema(self.model.named_parameters())
 
                     train_metrics = self._add_metrics(result_metrics, train_metrics)
 
@@ -141,7 +159,11 @@ class Model:
                     print(print_string % print_data)
 
                 # self._logger_add_record(epoch+1, test_scalars, test_metrics)
-                    
+
+                # ema                
+                if ema_decay:
+                    torch.save(ema.shadow, os.path.join(self.logdir, 'ema_'+str(epoch+1)+'.pth'))
+
                 torch.save(self.model.state_dict(), os.path.join(self.logdir, 'model_' + str(epoch + 1) + '.pth'))
                 
                 self.notes['epochs'].append([train_metrics, test_metrics])

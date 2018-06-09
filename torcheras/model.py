@@ -44,7 +44,8 @@ class Model:
         self.device = device
         
         # notes
-        self.notes['optimizer'] = self.optimizer.__class__.__name__
+        self.notes['optimizer'] = self.optimizer.__class__.__name__ \
+                if 'param_groups' in dir(self.optimizer) else self.optimizer.optimizer.__class__.__name__
         self.notes['metrics'] = self.metrics
         self.notes['multi_tasks'] = self.multi_tasks
         
@@ -53,7 +54,16 @@ class Model:
         
         # optimizer parameters
         param_groups_num = 0
-        param_groups = self.optimizer.param_groups if 'param_groups' in dir(self.optimizer) else self.optimizer.optimizer.param_groups
+       
+        if 'param_groups' in dir(self.optimizer):
+            self.optimizer = self.optimizer
+            self.scheduler = None
+        else:
+            self.scheduler = self.optimizer
+            self.optimizer = self.scheduler.optimizer
+            
+        param_groups = self.optimizer.param_groups
+
         for param_group in param_groups:
             if 'module_name' in param_group:
                 self.notes['params'][param_group['module_name']] = {}
@@ -126,8 +136,12 @@ class Model:
                     
                     loss = result_metrics[0]
                     loss.backward()
-                    self.optimizer.step()
 
+                    # scheduler optimizer
+                    if self.scheduler:
+                        self.scheduler.step()
+                    self.optimizer.step()
+                    
                     if ema_decay:
                         ema(self.model.named_parameters())
 

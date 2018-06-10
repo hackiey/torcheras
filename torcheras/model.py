@@ -95,7 +95,8 @@ class Model:
         return self.model.parameters()
 
     def fit(self, train_data, val_data, epochs = 200, 
-            ema_decay=None):        
+            ema_decay=None,
+            clip_max=None):        
 
         if not self.for_train:
             raise AttributeError('This model is not for training.')
@@ -136,6 +137,10 @@ class Model:
                     
                     loss = result_metrics[0]
                     loss.backward()
+
+                    # clip max
+                    if clip_max:
+                        torch.nn.utils.clip_grad_norm(self.model.parameters(), clip_max)
 
                     # scheduler optimizer
                     if self.scheduler:

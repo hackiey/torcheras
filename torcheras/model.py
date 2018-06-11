@@ -12,7 +12,7 @@ import torch
 import random
 
 from . import metrics
-from .ema import EMA
+from . import utils
 
 class Model:
     def __init__(self, model, logdir, for_train = True):
@@ -79,6 +79,9 @@ class Model:
                 if k != 'params':
                     self.notes['params'][k] = v
 
+        # count parameters
+        utils.model.count_parameters(self.model)
+
     def load_model(self, sub_folder, epoch=1, ema=False):
         if ema:
             ema_shadow = torch.load(os.path.join(self.logdir, sub_folder, 'ema_'+str(epoch)+'.pth'))
@@ -123,7 +126,7 @@ class Model:
 
             # expenential moving average
             if ema_decay:
-                ema = EMA(ema_decay, self.model.named_parameters())
+                ema = utils.train.EMA(ema_decay, self.model.named_parameters())
             
             for epoch in range(epochs):
                 # ========== train ==========

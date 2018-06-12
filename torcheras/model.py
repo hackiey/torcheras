@@ -190,8 +190,8 @@ class Model:
                 
                 self.notes['epochs'].append([train_metrics, test_metrics])
             
-            # save notes
-            self._save_notes()
+                # save notes
+                self._save_notes()
 
         except KeyboardInterrupt:
             try:

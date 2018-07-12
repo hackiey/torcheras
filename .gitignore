@@ -1,5 +1,6 @@
 tests/test_records
 tests/data
+tests/runs
 
 # IDE stuff
 .vscode/*

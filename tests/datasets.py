@@ -30,12 +30,6 @@ class BinaryDatasetMultiTasks(DefaultDataset):
         super(BinaryDatasetMultiTasks, self).__init__(N)
         self.x = np.random.random((N, D_in)).astype(np.float32)
         self.y = np.random.randint(0,2, (N, D_out)).astype(np.float32)
-    
-# class CategoricalDataset(DefaultDataset):
-#     def __init__(self, N, D_in, D_out):
-#         super(CategoricalDataset, self).__init__(N, D_in, D_out)
-#         self.x = np.random.random((N, D_in)).astype(np.float32)
-#         self.y = np.random.randint(0, D_out, (N, 1)).astype(np.int)
         
 class ContinuousDatasetMultiTasks(DefaultDataset):
     def __init__(self, N, D_in, D_out1, D_out2):

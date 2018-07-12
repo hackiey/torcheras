@@ -10,10 +10,10 @@ def count_parameters(model):
         num_parameter = parameter.numel()
 
         if parameter.requires_grad:
-            name += ' y '
-        else:
-            name += ' n '
+            print_str += ' y '
             trainable_parameters += num_parameter
+        else:
+            print_str += ' n '       
         total_parameters += num_parameter
         
         print_str += str(parameter.shape)

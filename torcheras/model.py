@@ -6,13 +6,12 @@ import time
 from datetime import datetime
 
 import torch
-# from torch.autograd import Variable
-# from visualdl import LogWriter
+from torch import Tensor
     
 import random
 
-from . import metrics
 from . import utils
+from .utils.log import MetricsLog
 
 class Model:
     def __init__(self, model, logdir, for_train = True):
@@ -34,11 +33,11 @@ class Model:
     def set_description(self, description):
         self.notes['description'] = description
     
-    def compile(self, loss_function, optimizer, metrics = [], multi_tasks = [''], custom_objects = {}, device = torch.device('cpu')):
-        self.loss_function = loss_function
+    def compile(self, loss_fn, optimizer, metrics = [], multi_tasks = [], custom_objects = {}, device = torch.device('cpu')):
+        self.loss_fn = loss_fn
         
         self.optimizer = optimizer
-        self.metrics = ['loss'] + metrics
+        self.metrics = metrics
         self.multi_tasks = multi_tasks
         self.custom_objects = custom_objects
         self.device = device
@@ -97,9 +96,13 @@ class Model:
     def parameters(self):
         return self.model.parameters()
 
-    def fit(self, train_data, val_data, epochs = 200, 
+    def fit(self, train_data, test_data=None, 
+            epochs = 200, 
             ema_decay=None,
-            clip_max=None):        
+            grad_clip=None, 
+            save_state=True,
+            batch_callback=None, 
+            epoch_callback=None):        
 
         if not self.for_train:
             raise AttributeError('This model is not for training.')
@@ -113,16 +116,10 @@ class Model:
 
             if not os.path.exists(self.logdir):
                 os.mkdir(self.logdir)
-        
-            # self.logger = LogWriter(self.logdir, sync_cycle = 50)
-
-            # if self.logdir != '':
-            #     train_scalars, test_scalars = self._init_logger()
                 
             print(self.logdir)
             print(self.notes['optimizer'])
             print(self.notes['params'])
-
 
             # expenential moving average
             if ema_decay:
@@ -131,19 +128,18 @@ class Model:
             for epoch in range(epochs):
                 # ========== train ==========
                 self.model.train()
-                train_metrics = []
+                train_metrics = MetricsLog(self.metrics, self.loss_fn, 
+                                            multi_tasks=self.multi_tasks, custom_objects=self.custom_objects)
                 for i_batch, sample_batched in enumerate(train_data):
                     self.model.zero_grad()
-                    x,y = self._variable_data(sample_batched)
-                    
-                    result_metrics = self._evaluate(x, y)
-                    
-                    loss = result_metrics[0]
+                    x, y_true = self._variable_data(sample_batched)
+                    y_pred = self.model.forward(x)
+                    loss, batch_metrics = train_metrics.evaluate(y_pred, y_true)
                     loss.backward()
 
-                    # clip max
-                    if clip_max:
-                        torch.nn.utils.clip_grad_norm(self.model.parameters(), clip_max)
+                    # grad clip
+                    if grad_clip:
+                        torch.nn.utils.clip_grad_norm(self.model.parameters(), grad_clip)
 
                     # scheduler optimizer
                     if self.scheduler:
@@ -153,44 +149,43 @@ class Model:
                     if ema_decay:
                         ema(self.model.named_parameters())
 
-                    train_metrics = self._add_metrics(result_metrics, train_metrics)
+                    # batch callback
+                    if batch_callback:
+                        batch_callback(epoch, i_batch, batch_metrics)
 
-                    print_string, print_data = self._make_print(epoch, i_batch, result_metrics)
+                    print_string, print_data = self._make_print(epoch, i_batch, batch_metrics)
                     print(print_string % print_data, end='')
                     print('\r', end='')
 
                 # train metrics
-                train_metrics = self._average_metrics(train_metrics, i_batch)
-                print_string, print_data = self._make_print(epoch, i_batch, train_metrics)
+                train_metrics_averaged = train_metrics.average()
+                print_string, print_data = self._make_print(epoch, i_batch, train_metrics_averaged)
                 print(print_string % print_data) 
 
-                # self._logger_add_record(epoch+1, train_scalars, train_metrics)
-                    
-                # ========== test ==========
-                self.model.eval()
-                with torch.no_grad():
-                    test_metrics = []
-                    for i_batch, sample_batched in enumerate(val_data):
-                        X,y = self._variable_data(sample_batched)
-                        result_metrics = self._evaluate(X, y)
-                        test_metrics = self._add_metrics(result_metrics, test_metrics)
+                # epoch callback
+                if epoch_callback:
+                    epoch_callback(epoch, train_metrics_averaged)
                 
-                    # test metrics
-                    test_metrics = self._average_metrics(test_metrics, i_batch)
-                    print_string, print_data = self._make_print(epoch, i_batch, test_metrics)
-                    print(print_string % print_data)
-
-                # self._logger_add_record(epoch+1, test_scalars, test_metrics)
+                # ========== test ==========
+                if test_data:
+                    self.model.eval()
+                    test_metrics_averaged = self.evaluate(test_data, batch_num=len(test_data))
 
                 # ema                
                 if ema_decay:
                     torch.save(ema.shadow, os.path.join(self.logdir, 'ema_'+str(epoch+1)+'.pth'))
 
-                torch.save(self.model.state_dict(), os.path.join(self.logdir, 'model_' + str(epoch + 1) + '.pth'))
-                
-                self.notes['epochs'].append([train_metrics, test_metrics])
-            
+                # save model
+                if save_state:
+                    torch.save(self.model.state_dict(), os.path.join(self.logdir, 'model_' + str(epoch + 1) + '.pth'))
+                else:
+                    torch.save(self.model, os.path.join(self.logdir, 'model_' + str(epoch + 1) + '.pt'))
+                            
                 # save notes
+                if test_data:
+                    self.notes['epochs'].append([json.dumps(train_metrics_averaged), json.dumps(test_metrics_averaged)])
+                else:
+                    self.notes['epochs'].append([json.dumps(train_metrics_averaged)])
                 self._save_notes()
 
         except KeyboardInterrupt:
@@ -209,18 +204,23 @@ class Model:
             traceback.print_exc()
             self._del_logdir()
 
-    def evaluate(self, test_data):
+    def evaluate(self, test_data, batch_num = 100):
         with torch.no_grad():
-            test_metrics = []
+            test_metrics = MetricsLog(self.metrics, self.loss_fn, 
+                                        multi_tasks=self.multi_tasks, custom_objects=self._custom_objects)
             for i_batch, sample_batched in enumerate(test_data):
-                X,y = self._variable_data(sample_batched)
-                result_metrics = self._evaluate(X, y)
-                test_metrics = self._add_metrics(result_metrics, test_metrics)
-        
+                x, y_true = self._variable_data(sample_batched)
+                y_pred = self.model.forward(x)
+                test_metrics.evaluate(y_pred, y_true)
+                if test_metrics.steps > batch_num:
+                    break    
+
             # test metrics
-            test_metrics = self._average_metrics(test_metrics, i_batch)
-            print_string, print_data = self._make_print(epoch, i_batch, test_metrics)
+            test_metrics_averaged = test_metrics.average()
+            print_string, print_data = self._make_print('test', i_batch, test_metrics_averaged)
             print(print_string % print_data)
+            
+            return test_metrics_averaged
                 
     # === private ===
     def _variable_data(self, sample_batched):
@@ -239,109 +239,29 @@ class Model:
         
         return x, y
 
-    def _evaluate(self, X, y):
-        output = self.model.forward(X)
-        loss = self.loss_function(output, y)
-        result_metrics = [loss]     
-        
-        if self.multi_tasks[0] == '':
-            # single task
-            result_metrics.extend(self._make_result_metrics(output, y))
-        else:
-            # multi tasks
-            multi_tasks_length = len(self.multi_tasks)
-            
-            # for output (predictions)
-            multi_outputs = []
-            
-            if type(output) is tuple or type(output) is list:
-                for i in range(multi_tasks_length):
-                    multi_outputs.append(output[i])
-            else:
-                for i in range(multi_tasks_length):
-                    multi_outputs.append(output[:,i])
-            
-            # for y (true labels)
-            multi_y = []
-            if type(y) is tuple or type(y) is list:
-                for i in range(multi_tasks_length):
-                    multi_y.append(y[i])
-            else:
-                for i in range(multi_tasks_length):
-                    multi_y.append(y[:,i])                    
-
-            for _output, _y in zip(multi_outputs, multi_y):
-                result_metrics.extend(self._make_result_metrics(_output, _y))
-                        
-        return result_metrics
-    
-    def _add_metrics(self, result_metrics, metrics):
-        if len(metrics) == 0:
-            for metric in result_metrics:
-                metrics.append(0.0)
-                
-        for i, result in enumerate(result_metrics):  
-            metrics[i] = metrics[i] + result.item()
-            
-        return metrics   
-
-    def _average_metrics(self, metrics, i_batch):
-        for i in range(len(metrics)):
-            metrics[i] = metrics[i] / (i_batch + 1)
-        return metrics   
-    
-    def _make_result_metrics(self, output, y):
-        result_metrics = []
-        
-        metrics_dic = {}     
-        # for unified computation
-        topk = ()
-        
-        for metric in self.metrics:
-            if metric == 'loss':
-                continue
-            elif metric == 'binary_acc':
-                metrics_dic[metric] = metrics.binary_accuracy(y, output)
-            elif metric == 'categorical_acc':
-                metrics_dic[metric] = metrics.categorical_accuracy(y, output)
-            elif metric.startswith('top'):
-                # get the k in 'top1, top2, ...'
-                topk = topk + (int(metric[3:]), ) 
-            else:
-                # custom metrics
-                metrics_dic[metric] = self.custom_objects[metric](y, output)
-        
-        # for unified computation
-        if len(topk) != 0:
-            topk_metrics = metrics.topk(y, output, topk)
-            for i, k in enumerate(topk):
-                metrics_dic['top' + str(k)] = topk_metrics[i]
-                
-        # build result_metrics
-        for metric in self.metrics[1:]:
-            result_metrics.append(metrics_dic[metric])
-            
-        return result_metrics
-        
     def _make_print(self, epoch, i_batch, metric_values):
-        print_string = '[%d, %5d] loss: %.5f'
-        print_data = (epoch + 1, i_batch + 1, metric_values[0])
-            
-        metric_values_index = 1
-        for output in self.multi_tasks:      
-            if output != '':
-                print_string = print_string + ', ' + output + ': '
-            else:
-                print_string = print_string + ', '
-                
-            for metric, value in zip(self.metrics[1:], metric_values[metric_values_index:]):
-                print_string  = print_string + metric + ': %.5f, '
-                print_data = print_data + (value, )
-                    
-                metric_values_index += 1
-                
+        if type(epoch) == str:
+            print_string = '[%s, %5d] loss: %.5f'
+            print_data = (epoch, i_batch + 1, metric_values['loss'])
+        else:
+            print_string = '[%d, %5d] loss: %.5f'
+            print_data = (epoch + 1, i_batch + 1, metric_values['loss'])
+        
+        if len(self.multi_tasks) == 0:
+            print_string = print_string + ', '
+            for metric in self.metrics:
+                print_string = print_string + metric + ': %.5f, '
+                print_data = print_data + (metric_values[metric], )
             # delete last ', ' from the print string
             print_string = print_string[: -2]
+        else:
+            for task in self.multi_tasks:
+                print_string = print_string + ', ' + task + ': '
+                for metric in self.metrics:
+                    print_string = print_string + metric + ': %.5f, '
+                    print_data = print_data + (metric_values[task][metric], )              
+                # delete last ', ' from the print string
+                print_string = print_string[: -2]
 
         return print_string, print_data
     

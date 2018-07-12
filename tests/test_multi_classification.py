@@ -71,4 +71,4 @@ test_loader = torch.utils.data.DataLoader(
                 batch_size=batch_size,
                 shuffle=False)
 
-model.fit(train_loader, test_loader, epochs = 200)
+model.fit(train_loader, test_data = test_loader, epochs = 200)

@@ -49,4 +49,4 @@ elif test_type == 'multi tasks classification':
     multi_tasks = ['output_a', 'output_b', 'output_c']
     model.compile(criterion, optimizer, metrics = ['binary_acc'], multi_tasks = multi_tasks, device=device)
 
-model.fit(train_dataloader, test_dataloader, epochs)
+model.fit(train_dataloader, test_data = test_dataloader, epochs)

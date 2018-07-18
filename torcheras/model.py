@@ -7,8 +7,6 @@ from datetime import datetime
 
 import torch
 from torch import Tensor
-    
-import random
 
 from . import utils
 from .utils.log import MetricsLog

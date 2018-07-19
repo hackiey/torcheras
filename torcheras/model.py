@@ -41,10 +41,11 @@ class Model:
         self.device = device
         
         # notes
-        self.notes['optimizer'] = self.optimizer.__class__.__name__ \
-                if 'param_groups' in dir(self.optimizer) else self.optimizer.optimizer.__class__.__name__
         self.notes['metrics'] = self.metrics
         self.notes['multi_tasks'] = self.multi_tasks
+        if self.optimizer:
+            self.notes['optimizer'] = self.optimizer.__class__.__name__ \
+                    if 'param_groups' in dir(self.optimizer) else self.optimizer.optimizer.__class__.__name__
         
         # send model to the device
         self.model.to(self.device)

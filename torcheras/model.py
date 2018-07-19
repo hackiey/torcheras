@@ -31,7 +31,7 @@ class Model:
     def set_description(self, description):
         self.notes['description'] = description
     
-    def compile(self, loss_fn, optimizer, metrics = [], multi_tasks = [], custom_objects = {}, device = torch.device('cpu')):
+    def compile(self, loss_fn, optimizer=None, metrics = [], multi_tasks = [], custom_objects = {}, device = torch.device('cpu')):
         self.loss_fn = loss_fn
         
         self.optimizer = optimizer

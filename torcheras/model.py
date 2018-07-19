@@ -50,31 +50,32 @@ class Model:
         self.model.to(self.device)
         
         # optimizer parameters
-        param_groups_num = 0
-       
-        if 'param_groups' in dir(self.optimizer):
-            self.optimizer = self.optimizer
-            self.scheduler = None
-        else:
-            self.scheduler = self.optimizer
-            self.optimizer = self.scheduler.optimizer
-            
-        param_groups = self.optimizer.param_groups
-
-        for param_group in param_groups:
-            if 'module_name' in param_group:
-                self.notes['params'][param_group['module_name']] = {}
+        if self.optimizer:
+            param_groups_num = 0
+        
+            if 'param_groups' in dir(self.optimizer):
+                self.optimizer = self.optimizer
+                self.scheduler = None
             else:
-                continue               
-            param_groups_num += 1
-            for k, v in param_group.items():
-                if k != 'params' and k != 'module_name':
-                    self.notes['params'][param_group['module_name']][k] = v
-                    
-        if param_groups_num == 0 and len(param_groups) == 1:
-            for k, v in param_groups[0].items():
-                if k != 'params':
-                    self.notes['params'][k] = v
+                self.scheduler = self.optimizer
+                self.optimizer = self.scheduler.optimizer
+                
+            param_groups = self.optimizer.param_groups
+
+            for param_group in param_groups:
+                if 'module_name' in param_group:
+                    self.notes['params'][param_group['module_name']] = {}
+                else:
+                    continue               
+                param_groups_num += 1
+                for k, v in param_group.items():
+                    if k != 'params' and k != 'module_name':
+                        self.notes['params'][param_group['module_name']][k] = v
+                        
+            if param_groups_num == 0 and len(param_groups) == 1:
+                for k, v in param_groups[0].items():
+                    if k != 'params':
+                        self.notes['params'][k] = v
 
         # count parameters
         utils.model.count_parameters(self.model)

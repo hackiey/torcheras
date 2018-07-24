@@ -26,7 +26,7 @@ class Model:
             'metrics':[]
         }
             
-        self._custom_objects = {}
+        self.custom_objects = {}
             
     def set_description(self, description):
         self.notes['description'] = description
@@ -207,7 +207,7 @@ class Model:
     def evaluate(self, test_data, batch_num = 100):
         with torch.no_grad():
             test_metrics = MetricsLog(self.metrics, self.loss_fn, 
-                                        multi_tasks=self.multi_tasks, custom_objects=self._custom_objects)
+                                        multi_tasks=self.multi_tasks, custom_objects=self.custom_objects)
             for i_batch, sample_batched in enumerate(test_data):
                 x, y_true = self._variable_data(sample_batched)
                 y_pred = self.model.forward(x)

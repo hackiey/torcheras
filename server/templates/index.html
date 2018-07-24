@@ -153,8 +153,8 @@
 
                     markPoint: {
                         data: [
-                            {type: 'max', name: '最大值'},
-                            {type: 'min', name: '最小值'}
+                            {type: 'max', name: 'max value'},
+                            {type: 'min', name: 'min value'}
                         ]
                     },
                 }],
@@ -168,14 +168,26 @@
             return option
         }
 
+        var get_metrics = function(task, metric, data_type, metric_values){
+            var chart_data = []
+            for (var i in metric_values){
+                var value = (data_type == 'train' ? metric_values[i][0] : metric_values[i][1])
+                if (task == ''){
+                    chart_data.push(value[metric].toFixed(5))
+                }
+                else{
+                    chart_data.push(value[task][metric].toFixed(5))
+                }
+            }
+            return chart_data
+        }
+
         $('.model_name').click(function(e){
 
             model_name = $(this).text()
             
             $.post('/notes', {model_name: model_name}, function(data){
                 data = JSON.parse(data)
-
-                console.log(data)
 
                 // empty
                 $("#detail").empty()
@@ -215,7 +227,7 @@
                 var test_charts_data = [[]]
 
                 // charts title
-                var titles = [['', 'loss']]
+                var titles = [['', 'loss']] // for empty multi tasks and loss metric
 
                 // train loss
                 $("#train_scalars_card").append('<div class="scalars_chart"><div style="width:100%;height:100%" id="train_loss"></div></div>')
@@ -224,7 +236,7 @@
 
                 var train_charts = [echarts.init(document.getElementById('train_loss'))]
                 var test_charts  = [echarts.init(document.getElementById('test_loss'))]
-                
+
                 for (var i in data.multi_tasks){
                     for (var j = 1; j < data.metrics.length; ++j){
                         var output = data.multi_tasks[i]
@@ -241,7 +253,7 @@
                         // charts
                         train_charts.push(echarts.init(document.getElementById('train_' + output + '_' + metric)))
                         test_charts.push(echarts.init(document.getElementById('test_' + output + '_' + metric)))
-
+                        
                         // charts data
                         train_charts_data.push([])
                         test_charts_data.push([])
@@ -251,27 +263,18 @@
                     }
                 }
                 
-                for (var i in data.epochs){
-                    // train data
-                    train_data = data.epochs[i][0]
-                    for (var j in train_data){
-                        train_charts_data[j].push(train_data[j].toFixed(5))
-                    }
-                    // test data
-                    test_data = data.epochs[i][1]
-                    for (var j in test_data){
-                        test_charts_data[j].push(test_data[j].toFixed(5))
-                    }
-                }
+                // loss
+                // for (var i=0; i<data.epochs)
                 
                 // train charts
                 for (var i in train_charts){
-                    var option = to_charts('train', titles[i], train_charts_data[i])
+
+                    var option = to_charts('train', titles[i], get_metrics(titles[i][0], titles[i][1], 'train', data.epochs))
                     train_charts[i].setOption(option)
                 }
                 // test charts
                 for (var i in test_charts){
-                    var option = to_charts('test', titles[i], test_charts_data[i])
+                    var option = to_charts('test', titles[i], get_metrics(titles[i][0], titles[i][1], 'test', data.epochs))
                     test_charts[i].setOption(option)
                 }
 

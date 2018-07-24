@@ -30,8 +30,8 @@ def multiCrossEntropy(y_pred, y_true):
     loss = loss / y_pred[0].shape[0]
     return loss
 
-test_type = 'single task classification'
-# test_type = 'multi tasks classification'
+# test_type = 'single task classification'
+test_type = 'multi tasks classification'
 
 if test_type == 'single task classification':
     

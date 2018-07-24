@@ -13,8 +13,8 @@ epochs = 200
 
 device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
-# test_type = 'single task classification'
-test_type = 'multi tasks classification'
+test_type = 'single task classification'
+# test_type = 'multi tasks classification'
 
 if test_type == 'single task classification':
     # Create dataset
@@ -49,4 +49,4 @@ elif test_type == 'multi tasks classification':
     multi_tasks = ['output_a', 'output_b', 'output_c']
     model.compile(criterion, optimizer, metrics = ['binary_acc'], multi_tasks = multi_tasks, device=device)
 
-model.fit(train_dataloader, test_data = test_dataloader, epochs)
+model.fit(train_dataloader, test_dataloader, epochs)

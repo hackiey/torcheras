@@ -183,9 +183,9 @@ class Model:
                             
                 # save notes
                 if test_data:
-                    self.notes['epochs'].append([json.dumps(train_metrics_averaged), json.dumps(test_metrics_averaged)])
+                    self.notes['epochs'].append([train_metrics_averaged, test_metrics_averaged])
                 else:
-                    self.notes['epochs'].append([json.dumps(train_metrics_averaged)])
+                    self.notes['epochs'].append([train_metrics_averaged])
                 self._save_notes()
 
         except KeyboardInterrupt:

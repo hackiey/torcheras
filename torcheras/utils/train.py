@@ -22,8 +22,15 @@ class EMA():
         
         for _name, _parameter in parameters:
             if _parameter.requires_grad:
-                new_average = (1.0 - decay) * _parameter.data + decay * self.shadow[_name]
+                device_model = _parameter.device
+                device_shadow = self.shadow[_name].device
+                
+                if device_model != device_shadow:
+                    new_average = (1.0 - decay) * _parameter.to(device_shadow).data + decay * self.shadow[_name]
+                else:    
+                    new_average = (1.0 - decay) * _parameter.data + decay * self.shadow[_name]                    
                 self.shadow[_name] = new_average.clone()
+                
         return self.shadow
     
     def assign(self, model, device_store=None, device_execute=None):

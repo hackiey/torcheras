@@ -1,6 +1,6 @@
 # Installation
 ```
-$ git clone https://gitlab.com/GammaLab_AI/torcheras.git
+$ git clone https://github.com/hackiey/torcheras.git
 
 $ python setup.py install
 ```

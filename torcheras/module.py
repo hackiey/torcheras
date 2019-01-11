@@ -4,6 +4,7 @@ import json
 import shutil
 import traceback
 import torch
+import time
 
 from datetime import datetime
 
@@ -37,16 +38,16 @@ class Module(torch.nn.Module):
         print('total parameters', total_parameters)
         print('trainable parameters', trainable_parameters)
 
-    def load_model(self, sub_folder, suffix=1, ema=False):
+    def load_model(self, logdir, sub_folder, suffix=1, ema=False):
         if ema:
             ema_shadow = torch.load(
-                os.path.join(self._logdir, sub_folder, 'ema_'+str(suffix)+'.pth'))
+                os.path.join(logdir, sub_folder, 'ema_'+str(suffix)+'.pth'))
             state_dict = self.state_dict()
             state_dict.update(ema_shadow)
             self.load_state_dict(state_dict)
         else:
             self.load_state_dict(torch.load(
-                os.path.join(self._logdir, sub_folder, 'ckpt_'+str(suffix)+'.pth')))
+                os.path.join(logdir, sub_folder, 'ckpt_'+str(suffix)+'.pth')))
 
     def fit(self,
             train_dataloader,

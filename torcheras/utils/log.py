@@ -25,7 +25,7 @@ class MetricsLog:
         loss = self.loss_fn(y_pred, y_true)
 
         self.steps += 1
-        if if_metric == False:
+        if not if_metric:
             return loss, None
 
         if len(self.multi_tasks) == 0:  

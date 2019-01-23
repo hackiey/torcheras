@@ -14,7 +14,10 @@ from . import utils
 class Module(torch.nn.Module):
     def __init__(self):
         super(Module, self).__init__()
-
+        
+        self._metrics = []
+        self._multi_tasks = []
+        self._custom_objects = {}
     def forward(self, *inputs):
         raise NotImplementedError
         
@@ -28,12 +31,11 @@ class Module(torch.nn.Module):
 
         self._optimizer = optimizer
         self._loss_fn = loss_fn
-        self._metrics = metrics or []
-        self._multi_tasks = multi_tasks or []
-
+        self._metrics = metrics or self._metrics
+        self._multi_tasks = multi_tasks or self._multi_tasks
+        self._custom_objects = custom_objects or self._custom_objects
         self._lr_scheduler = lr_scheduler
-        self._custom_objects = custom_objects or {}
-
+        
         total_parameters, trainable_parameters = utils.model.count_parameters(self)
         print('total parameters', total_parameters)
         print('trainable parameters', trainable_parameters)
@@ -112,13 +114,15 @@ class Module(torch.nn.Module):
                     if batch_callback:
                         batch_callback(self, epoch, global_step, batch_metrics)
 
-                    print_string, print_data = self._make_print(epoch, step, batch_metrics)
+                    print_string, print_data = self._make_print(
+                        epoch, step, batch_metrics, self._metrics, self._multi_tasks)
                     print(print_string % print_data, end='')
                     print('\r', end='')
 
                 # train metrics
                 train_metrics_averaged = train_metrics.average()
-                print_string, print_data = self._make_print(epoch, step, train_metrics_averaged)
+                print_string, print_data = self._make_print(
+                    epoch, step, train_metrics_averaged, self._metrics, self._multi_tasks)
                 print(print_string % print_data)
 
                 # epoch callback
@@ -166,19 +170,27 @@ class Module(torch.nn.Module):
             traceback.print_exc()
             self._del_logdir(logdir)
 
-    def evaluate(self, test_dataloader, batch_num, loss_fn=None, metrics=None, multi_tasks=None, custom_objects=None):
+    def evaluate(self, test_dataloader, batch_num=None, loss_fn=None, metrics=None, multi_tasks=None, custom_objects={}):
+        batch_num = batch_num or len(test_dataloader) 
+        
+        metrics = metrics or self._metrics
+        multi_takss = multi_tasks or self._multi_tasks
+        custom_objects = custom_objects or self._custom_objects
+        
+        if_metric = len(metrics) > 0 or len(multi_tasks) > 0
+        
         with torch.no_grad():
             test_metrics = utils.log.MetricsLog(metrics, loss_fn, multi_tasks, custom_objects)
             for step, batch in enumerate(test_dataloader):
                 inputs, labels = self._variable_data(batch)
                 preds = self.forward(*inputs)
-                test_metrics.evaluate(preds, labels)
+                test_metrics.evaluate(preds, labels, if_metric)
                 if test_metrics.steps > batch_num:
                     break
 
             # test metrics
             test_metrics_averaged = test_metrics.average()
-            print_string, print_data = self._make_print('test', step, test_metrics_averaged)
+            print_string, print_data = self._make_print('test', step, test_metrics_averaged, metrics, multi_tasks)
             print(print_string % print_data)
 
             return test_metrics_averaged
@@ -199,7 +211,9 @@ class Module(torch.nn.Module):
 
         return inputs, labels
 
-    def _make_print(self, epoch, step, metric_values):
+    def _make_print(self, epoch, step, metric_values, metrics, multi_tasks):
+        if len(metric_values) == 0:
+            return 'no metrics', []
         if type(epoch) == str:
             print_string = '[%s, %5d] loss: %.5f'
             print_data = (epoch, step + 1, metric_values['loss'])
@@ -207,17 +221,17 @@ class Module(torch.nn.Module):
             print_string = '[%d, %5d] loss: %.5f'
             print_data = (epoch + 1, step + 1, metric_values['loss'])
 
-        if len(self._multi_tasks) == 0:
+        if len(multi_tasks) == 0:
             print_string = print_string + ', '
-            for metric in self._metrics:
+            for metric in metrics:
                 print_string = print_string + metric + ': %.5f, '
                 print_data = print_data + (metric_values[metric],)
             # delete last ', ' from the print string
             print_string = print_string[: -2]
         else:
-            for task in self._multi_tasks:
+            for task in multi_tasks:
                 print_string = print_string + ', ' + task + ': '
-                for metric in self._metrics:
+                for metric in metrics:
                     print_string = print_string + metric + ': %.5f, '
                     print_data = print_data + (metric_values[task][metric],)
                     # delete last ', ' from the print string

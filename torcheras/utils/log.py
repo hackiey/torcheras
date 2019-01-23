@@ -22,7 +22,10 @@ class MetricsLog:
         self.steps = 0
     
     def evaluate(self, y_pred, y_true, if_metric=True):
-        loss = self.loss_fn(y_pred, y_true)
+        loss = 0
+        if self.loss_fn is not None:
+            loss = self.loss_fn(y_pred, y_true)
+            self.metrics_log['loss'] += loss.item()
 
         self.steps += 1
         if not if_metric:
@@ -56,6 +59,7 @@ class MetricsLog:
                 for metric, value in self._make_result_metrics(_y_pred, _y_true).items():
                     self.metrics_log[task][metric] += value.item()
                     result_metrics[task][metric] = value.item()
+                    
         return loss, result_metrics
 
     def _make_result_metrics(self, y_pred, y_true):

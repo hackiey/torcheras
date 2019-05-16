@@ -94,7 +94,11 @@ class Module(torch.nn.Module):
                     self._optimizer.zero_grad()
 
                     inputs, labels = self._variable_data(batch)
-                    preds = self.forward(*inputs)
+
+                    if isinstance(inputs, (list, tuple)):
+                        preds = self.forward(*inputs)
+                    else:
+                        preds = self.forward(inputs)
                     loss, batch_metrics = train_metrics.evaluate(preds, labels)
                     # TODO: gradient accumulation
                     loss.backward()

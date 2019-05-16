@@ -25,7 +25,7 @@ class MetricsLog:
         loss = 0
         if self.loss_fn is not None:
             loss = self.loss_fn(y_pred, y_true)
-            self.metrics_log['loss'] += loss.item()
+            # self.metrics_log['loss'] += loss.item()
 
         self.steps += 1
         if not if_metric:

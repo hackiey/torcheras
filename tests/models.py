@@ -1,9 +1,10 @@
 import torch
+import torcheras
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-class TwoLayerNet(torch.nn.Module):
+class TwoLayerNet(torcheras.Module):
     def __init__(self, D_in, H, D_out):
         """
         In the constructor we instantiate two nn.Linear modules and assign them as
@@ -23,7 +24,7 @@ class TwoLayerNet(torch.nn.Module):
         y_pred = self.linear2(h_relu)
         return y_pred
     
-class LeNet(nn.Module):
+class LeNet(torcheras.Module):
     def __init__(self):
         super(LeNet, self).__init__()
         self.conv1 = nn.Conv2d(1, 20, 5, 1)
@@ -45,7 +46,7 @@ class LeNet(nn.Module):
         return "LeNet"
     
     
-class MultiTasksClassification(nn.Module):
+class MultiTasksClassification(torcheras.Module):
     def __init__(self, D_in, H1, H2, D_out1, D_out2):
         super(MultiTasksClassification, self).__init__()
         self.linear1 = torch.nn.Linear(D_in, H1)

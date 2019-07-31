@@ -1,5 +1,5 @@
+
 from collections import defaultdict
-from tensorboardX import SummaryWriter
 
 from .. import metrics
 
@@ -9,7 +9,6 @@ class MetricsLog:
         self.metrics = metrics
         self.multi_tasks = multi_tasks
         self.custom_objects = custom_objects
-        self.writer = SummaryWriter()
         
         if len(self.multi_tasks) == 0:
             self.metrics_log = defaultdict(lambda: 0)
@@ -21,10 +20,13 @@ class MetricsLog:
         self.steps = 0
     
     def evaluate(self, y_pred, y_true, if_metric=True):
-        loss = self.loss_fn(y_pred, y_true)
+        loss = 0
+        if self.loss_fn is not None:
+            loss = self.loss_fn(y_pred, y_true)
+            # self.metrics_log['loss'] += loss.item()
 
         self.steps += 1
-        if if_metric == False:
+        if not if_metric:
             return loss, None
 
         if len(self.multi_tasks) == 0:  
@@ -55,6 +57,7 @@ class MetricsLog:
                 for metric, value in self._make_result_metrics(_y_pred, _y_true).items():
                     self.metrics_log[task][metric] += value.item()
                     result_metrics[task][metric] = value.item()
+                    
         return loss, result_metrics
 
     def _make_result_metrics(self, y_pred, y_true):

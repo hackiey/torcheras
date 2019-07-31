@@ -22,7 +22,7 @@ def count_parameters(model):
             trainable_parameters += num_parameter
         total_parameters += num_parameter
         
-    print('total parameters', total_parameters)
-    print('trainable parameters', trainable_parameters)
+    # print('total parameters', total_parameters)
+    # print('trainable parameters', trainable_parameters)
  
-    return total_parameters
+    return total_parameters, trainable_parameters

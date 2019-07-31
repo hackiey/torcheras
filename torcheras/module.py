@@ -21,6 +21,7 @@ class Module(torch.nn.Module):
         self._metrics = []
         self._multi_tasks = []
         self._custom_objects = {}
+        
     def forward(self, *inputs):
         raise NotImplementedError
         
@@ -150,7 +151,7 @@ class Module(torch.nn.Module):
 
                 # epoch callback
                 if epoch_callback:
-                    epoch_callback(epoch, train_metrics_averaged, writer, **kwargs)
+                    epoch_callback(self, epoch, train_metrics_averaged, writer, **kwargs)
 
                 # test
                 if test_dataloader:

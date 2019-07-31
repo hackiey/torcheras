@@ -1,6 +1,5 @@
 
 from collections import defaultdict
-from tensorboardX import SummaryWriter
 
 from .. import metrics
 
@@ -10,7 +9,6 @@ class MetricsLog:
         self.metrics = metrics
         self.multi_tasks = multi_tasks
         self.custom_objects = custom_objects
-        self.writer = SummaryWriter()
         
         if len(self.multi_tasks) == 0:
             self.metrics_log = defaultdict(lambda: 0)

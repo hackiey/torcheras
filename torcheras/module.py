@@ -9,6 +9,8 @@ import time
 from tqdm import tqdm
 from datetime import datetime
 
+from tensorboardX import SummaryWriter
+
 from . import utils
 
 
@@ -79,7 +81,10 @@ class Module(torch.nn.Module):
         if not os.path.exists(logdir):
             os.mkdir(logdir)
         print(logdir)
-        
+
+        # tensorboard
+        writer = SummaryWriter(log_dir=logdir)
+
         try:    
             if ema_decay:
                 ema = utils.train.EMA(ema_decay, self.parameters())
@@ -125,7 +130,7 @@ class Module(torch.nn.Module):
 
                     # batch callback
                     if batch_callback:
-                        batch_callback(self, epoch, global_step, batch_metrics, **kwargs)
+                        batch_callback(self, epoch, global_step, batch_metrics, writer, **kwargs)
                         
                     it_per_second, spent_time, left_time = timer()
                     print_string, print_data = self._make_print(
@@ -141,10 +146,11 @@ class Module(torch.nn.Module):
                     epoch, step, train_metrics_averaged, self._metrics, self._multi_tasks,
                     it_per_second, spent_time, left_time)
                 print(print_string % print_data)
+                self.write_tensorboard(writer, epoch, 'train', train_metrics_averaged)
 
                 # epoch callback
                 if epoch_callback:
-                    epoch_callback(epoch, train_metrics_averaged, **kwargs)
+                    epoch_callback(epoch, train_metrics_averaged, writer, **kwargs)
 
                 # test
                 if test_dataloader:
@@ -155,6 +161,7 @@ class Module(torch.nn.Module):
                                                           metrics=self._metrics,
                                                           multi_tasks=self._multi_tasks,
                                                           custom_objects=self._custom_objects)
+                    self.write_tensorboard(writer, epoch, 'test', test_metrics_averaged)
 
                 # save ema
                 if ema_decay and type(save_ema) == str:
@@ -257,11 +264,19 @@ class Module(torch.nn.Module):
                 for metric in metrics:
                     print_string = print_string + metric + ': %.3f, '
                     print_data = print_data + (metric_values[task][metric],)
-                    # delete last ', ' from the print string
+                # delete last ', ' from the print string
                 print_string = print_string[: -2]
 
         return print_string, print_data
     
+    def write_tensorboard(self, writer, step, mode, metrics_result):
+        for k1, v1 in metrics_result.items():
+            if type(v1) is dict:
+                for k2, v2 in v1.items():
+                    writer.add_scalar(f'{mode}/{k1}/{k2}', v2, step)
+            else:
+                writer.add_scalar(f'{mode}/{k1}', v1, step)
+                    
     def _del_logdir(self, logdir):
         shutil.rmtree(logdir)
         print(logdir + ' model deleted!')

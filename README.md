@@ -98,7 +98,7 @@ The variable data will be sent to the device of the first parameter of the model
 [test  20] loss: 0.57, acc: 0.82     # val
 ```
 
-## Graphic scalars
+## Tensorboard
 ```
 $ cd logdir
 $ tensorboard --logdir=.
@@ -108,3 +108,9 @@ $ tensorboard --logdir=.
 /tests/test_binary_classification.py
 
 /tests/test_multi_classifications.py
+
+# Screenshots
+### Multi tasks training
+![Training](screenshots/training.jpg)
+### Tensorboard
+![Tensorboard](screenshots/tensorboard.jpg)

@@ -7,7 +7,4 @@ setup(name='torcheras',
     version='0.3.0',
     author="Harry Xie", 
     packages=find_packages(),
-    include_package_data = True,
-    entry_points = {
-        'console_scripts': ['torcheras = server.__main__:main']
-    })
+    include_package_data = True)

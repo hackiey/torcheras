@@ -84,7 +84,7 @@ class Module(torch.nn.Module):
         print(logdir)
 
         # tensorboard
-        writer = SummaryWriter(log_dir=logdir)
+        writer = SummaryWriter(logdir=logdir)
 
         try:    
             if ema_decay:

@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from datetime import datetime
 
 class EMA():
     def __init__(self, decay, parameters, device_store=None):
@@ -53,3 +54,37 @@ class EMA():
                 else:
                     _parameter.data = self.original[_name]
                 
+                
+class Timer():
+    def __init__(self, length):
+        
+        self.length = length
+        self.step = 0
+        self.start_time = datetime.now()
+        self.last_time = self.start_time
+        
+    def strf_deltatime(self, deltatime):
+        m, s = divmod(deltatime, 60)
+        h, m = divmod(m, 60)
+        print_str = '%.2d:%.2d' % (int(m), int(s))
+        if h != 0:
+            print_str = str(h) + ':' + print_str
+        
+        return print_str
+        
+    def __call__(self):
+        
+        self.step += 1
+        now = datetime.now()
+        
+        spent_time = (now - self.start_time).total_seconds()
+        average_time = spent_time / self.step
+        left_time = average_time * (self.length - self.step)
+        self.last_time = now
+        
+        it_per_second = '%.2f it/s' % (1/average_time)
+        spent_time = self.strf_deltatime(spent_time)
+        left_time = self.strf_deltatime(left_time)
+        
+        return it_per_second, spent_time, left_time
+        

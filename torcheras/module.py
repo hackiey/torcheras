@@ -6,6 +6,7 @@ import traceback
 import torch
 import time
 
+from tqdm import tqdm
 from datetime import datetime
 
 from . import utils
@@ -60,9 +61,11 @@ class Module(torch.nn.Module):
             save_checkpoint='epoch',
             save_ema='epoch',
             ema_decay=None,
+            fp16=False,
             grad_clip=5.0,
             batch_callback=None,
-            epoch_callback=None):
+            epoch_callback=None,
+            **kwargs):
 
         if logdir != '' and not os.path.exists(logdir):
             os.mkdir(logdir)
@@ -75,15 +78,15 @@ class Module(torch.nn.Module):
 
         if not os.path.exists(logdir):
             os.mkdir(logdir)
-
         print(logdir)
         
-        try:
+        try:    
             if ema_decay:
                 ema = utils.train.EMA(ema_decay, self.parameters())
-
+            
             global_step = 0
             for epoch in range(epochs):
+                timer = utils.train.Timer(len(train_dataloader)) # Timer
                 self.train()
                 train_metrics = utils.log.MetricsLog(self._metrics,
                                                      self._loss_fn,
@@ -93,7 +96,7 @@ class Module(torch.nn.Module):
                 for step, batch in enumerate(train_dataloader):
                     self._optimizer.zero_grad()
 
-                    inputs, labels = self._variable_data(batch)
+                    inputs, labels = self._variable_data(batch, fp16=fp16)
 
                     if isinstance(inputs, (list, tuple)):
                         preds = self.forward(*inputs)
@@ -101,7 +104,13 @@ class Module(torch.nn.Module):
                         preds = self.forward(inputs)
                     loss, batch_metrics = train_metrics.evaluate(preds, labels)
                     # TODO: gradient accumulation
-                    loss.backward()
+                    if fp16:
+                        try:
+                            self._optimizer.backward(loss)
+                        except Exception as e:
+                            print('You may need install nvidia/apex for fp16 training')
+                    else:
+                        loss.backward()
                     global_step += 1
 
                     if grad_clip:
@@ -116,22 +125,26 @@ class Module(torch.nn.Module):
 
                     # batch callback
                     if batch_callback:
-                        batch_callback(self, epoch, global_step, batch_metrics)
-
+                        batch_callback(self, epoch, global_step, batch_metrics, **kwargs)
+                        
+                    it_per_second, spent_time, left_time = timer()
                     print_string, print_data = self._make_print(
-                        epoch, step, batch_metrics, self._metrics, self._multi_tasks)
+                        epoch, step, batch_metrics, self._metrics, self._multi_tasks,
+                        it_per_second, spent_time, left_time)
+                    
                     print(print_string % print_data, end='')
                     print('\r', end='')
 
                 # train metrics
                 train_metrics_averaged = train_metrics.average()
                 print_string, print_data = self._make_print(
-                    epoch, step, train_metrics_averaged, self._metrics, self._multi_tasks)
+                    epoch, step, train_metrics_averaged, self._metrics, self._multi_tasks,
+                    it_per_second, spent_time, left_time)
                 print(print_string % print_data)
 
                 # epoch callback
                 if epoch_callback:
-                    epoch_callback(epoch, train_metrics_averaged)
+                    epoch_callback(epoch, train_metrics_averaged, **kwargs)
 
                 # test
                 if test_dataloader:
@@ -187,7 +200,10 @@ class Module(torch.nn.Module):
             test_metrics = utils.log.MetricsLog(metrics, loss_fn, multi_tasks, custom_objects)
             for step, batch in enumerate(test_dataloader):
                 inputs, labels = self._variable_data(batch)
-                preds = self.forward(*inputs)
+                if isinstance(inputs, (list, tuple)):
+                    preds = self.forward(*inputs)
+                else:
+                    preds = self.forward(inputs)
                 test_metrics.evaluate(preds, labels, if_metric)
                 if test_metrics.steps > batch_num:
                     break
@@ -199,7 +215,7 @@ class Module(torch.nn.Module):
 
             return test_metrics_averaged
 
-    def _variable_data(self, batch):
+    def _variable_data(self, batch, fp16=False):
         device = next(self.parameters()).device
         inputs, labels = batch
         if type(inputs) is list or type(inputs) is tuple:
@@ -212,23 +228,26 @@ class Module(torch.nn.Module):
                 labels[i] = labels[i].to(device)
         else:
             labels = labels.to(device)
-
+            
+        if fp16:
+            return inputs.half(), labels
         return inputs, labels
 
-    def _make_print(self, epoch, step, metric_values, metrics, multi_tasks):
+    def _make_print(self, epoch, step, metric_values, metrics, multi_tasks, 
+                    it_per_second=None, spent_time=None, left_time=None):
         if len(metric_values) == 0:
             return 'no metrics', []
         if type(epoch) == str:
-            print_string = '[%s, %5d] loss: %.5f'
+            print_string = '[%s,%5d] loss: %.3f'
             print_data = (epoch, step + 1, metric_values['loss'])
         else:
-            print_string = '[%d, %5d] loss: %.5f'
-            print_data = (epoch + 1, step + 1, metric_values['loss'])
+            print_string = '[%d,%5d, %s<%s, %s] loss: %.3f'
+            print_data = (epoch + 1, step + 1, spent_time, left_time, it_per_second, metric_values['loss'])
 
         if len(multi_tasks) == 0:
             print_string = print_string + ', '
             for metric in metrics:
-                print_string = print_string + metric + ': %.5f, '
+                print_string = print_string + metric + ': %.3f, '
                 print_data = print_data + (metric_values[metric],)
             # delete last ', ' from the print string
             print_string = print_string[: -2]
@@ -236,7 +255,7 @@ class Module(torch.nn.Module):
             for task in multi_tasks:
                 print_string = print_string + ', ' + task + ': '
                 for metric in metrics:
-                    print_string = print_string + metric + ': %.5f, '
+                    print_string = print_string + metric + ': %.3f, '
                     print_data = print_data + (metric_values[task][metric],)
                     # delete last ', ' from the print string
                 print_string = print_string[: -2]

@@ -88,7 +88,7 @@ class Module(torch.nn.Module):
 
         try:    
             if ema_decay:
-                ema = utils.train.EMA(ema_decay, self.parameters())
+                ema = utils.train.EMA(ema_decay, self.named_parameters())
             
             global_step = 0
             for epoch in range(epochs):
@@ -180,7 +180,7 @@ class Module(torch.nn.Module):
         except KeyboardInterrupt:
             try:
                 time.sleep(0.5)
-                print("Is early stopped? please input 'y' or 'n(delete this model)'")
+                print("\nIs early stopped? please input 'y' or 'n(delete this model)'")
                 answer = input()
                 if answer == 'n':
                     self._del_logdir(logdir)

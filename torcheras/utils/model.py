@@ -12,7 +12,8 @@ def count_parameters(model):
         print_str += ' '
         print_str += str(num_parameter)
             
-        print(print_str)
+        # print(print_str)
+    # print(model)
     
     total_parameters = 0
     trainable_parameters = 0

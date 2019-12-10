@@ -71,7 +71,7 @@ class Module(torch.nn.Module):
             **kwargs):
 
         if logdir != '' and not os.path.exists(logdir):
-            os.mkdir(logdir)
+            os.makedirs(logdir, exist_ok=True)
 
         now = datetime.now()
         if sub_folder == '':
@@ -80,7 +80,8 @@ class Module(torch.nn.Module):
         logdir = os.path.join(logdir, sub_folder)
 
         if not os.path.exists(logdir):
-            os.mkdir(logdir)
+            # os.makedirs(logdir)
+            os.makedirs(os.path.join(logdir, 'checkpoints'), exist_ok=True)
         print(logdir)
 
         # tensorboard
@@ -89,17 +90,18 @@ class Module(torch.nn.Module):
         try:    
             if ema_decay:
                 ema = utils.train.EMA(ema_decay, self.named_parameters())
-            
+            self.train_dataloader = train_dataloader
+            self.test_dataloader = test_dataloader
             global_step = 0
             for epoch in range(epochs):
-                timer = utils.train.Timer(len(train_dataloader)) # Timer
+                timer = utils.train.Timer(len(self.train_dataloader)) # Timer
                 self.train()
                 train_metrics = utils.log.MetricsLog(self._metrics,
                                                      self._loss_fn,
                                                      multi_tasks=self._multi_tasks,
                                                      custom_objects=self._custom_objects)
 
-                for step, batch in enumerate(train_dataloader):
+                for step, batch in enumerate(self.train_dataloader):
                     self._optimizer.zero_grad()
 
                     inputs, labels = self._variable_data(batch, fp16=fp16)
@@ -121,7 +123,7 @@ class Module(torch.nn.Module):
 
                     if grad_clip:
                         torch.nn.utils.clip_grad_norm_(self.parameters(), grad_clip)
-
+                        
                     # TODO: lr_scheduler
                     self._optimizer.step()
 
@@ -149,33 +151,33 @@ class Module(torch.nn.Module):
                 print(print_string % print_data)
                 self.write_tensorboard(writer, epoch, 'train', train_metrics_averaged)
 
-                # epoch callback
-                if epoch_callback:
-                    epoch_callback(self, epoch, train_metrics_averaged, writer, **kwargs)
-
                 # test
-                if test_dataloader:
+                if self.test_dataloader:
                     self.eval()
-                    test_metrics_averaged = self.evaluate(test_dataloader, 
-                                                          batch_num=len(test_dataloader),
+                    test_metrics_averaged = self.evaluate(self.test_dataloader, 
+                                                          batch_num=len(self.test_dataloader),
                                                           loss_fn=self._loss_fn,
                                                           metrics=self._metrics,
                                                           multi_tasks=self._multi_tasks,
                                                           custom_objects=self._custom_objects)
                     self.write_tensorboard(writer, epoch, 'test', test_metrics_averaged)
+                    
+                # epoch callback
+                if epoch_callback:
+                    epoch_callback(self, epoch, train_metrics_averaged, writer, **kwargs)
 
                 # save ema
                 if ema_decay and type(save_ema) == str:
                     if save_ema == 'epoch':
-                        torch.save(ema.shadow, os.path.join(logdir, 'ema_'+str(epoch+1)+'.pth'))
+                        torch.save(ema.shadow, os.path.join(logdir, 'checkpoints', 'ema_'+str(epoch+1)+'.pth'))
 
                 # save checkpoint
                 if type(save_checkpoint) == str:
                     if save_checkpoint == 'epoch':
-                        torch.save(self.state_dict(), os.path.join(logdir, 'ckpt_'+str(global_step+1)+'.pth'))
+                        torch.save(self.state_dict(), os.path.join(logdir, 'checkpoints', 
+                                                                   'ckpt_'+str(global_step+1)+'.pth'))
 
-                # save notes
-                # TODO: tensorboard
+                # TODO: save params
                 
         except KeyboardInterrupt:
             try:
